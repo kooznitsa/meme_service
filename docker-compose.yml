@@ -1,0 +1,110 @@
+version: '3.9'
+
+services:
+  img_api:
+    build:
+      context: ./img_api
+      dockerfile: Dockerfile
+    hostname: img_api
+    container_name: img_api
+    restart: always
+    depends_on:
+      - img_postgres
+      - test_postgres
+      - minio_api
+    ports:
+      - '8000:8000'
+    env_file:
+      - .env.img_api
+    volumes:
+      - ./img_api:/home/app
+    networks:
+      - minio-net
+
+  minio_api:
+    build:
+      context: ./minio_api
+      dockerfile: Dockerfile
+    hostname: minio_api
+    container_name: minio_api
+    restart: always
+    depends_on:
+      - minio_postgres
+      - test_postgres
+    ports:
+      - '8001:9000'
+    env_file:
+      - .env.minio_api
+    volumes:
+      - ./minio_api:/home/app
+    networks:
+      - minio-net
+
+  img_postgres:
+    image: postgres:16
+    hostname: img_postgres
+    container_name: img_postgres
+    restart: on-failure
+    env_file:
+      - .env.img_api
+    ports:
+      - '5433:5432'
+    volumes:
+      - img-postgres:/var/lib/postgresql/data
+      - ./scripts/create_databases.sql:/docker-entrypoint-initdb.d/create_databases.sql
+    networks:
+      - minio-net
+
+  minio_postgres:
+    image: postgres:16
+    hostname: minio_postgres
+    container_name: minio_postgres
+    restart: on-failure
+    env_file:
+      - .env.minio_api
+    ports:
+      - '5434:5432'
+    volumes:
+      - minio-postgres:/var/lib/postgresql/data
+      - ./scripts/create_databases.sql:/docker-entrypoint-initdb.d/create_databases.sql
+    networks:
+      - minio-net
+
+  test_postgres:
+    image: postgres:16
+    hostname: test_postgres
+    container_name: test_postgres
+    restart: on-failure
+    env_file:
+      - .env.test
+    ports:
+      - '5435:5432'
+    volumes:
+      - test-postgres:/var/lib/postgresql/data
+      - ./scripts/create_databases.sql:/docker-entrypoint-initdb.d/create_databases.sql
+    networks:
+      - minio-net
+
+  minio:
+    container_name: minio
+    image: minio/minio
+    restart: always
+    command: server /data --console-address ":9001"
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    env_file:
+      - .env.minio_api
+    volumes:
+      - ./storage/minio:/data
+    networks:
+      - minio-net
+
+volumes:
+  img-postgres:
+  minio-postgres:
+  test-postgres:
+
+networks:
+  minio-net:
+    external: true
